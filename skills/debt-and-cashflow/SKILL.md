@@ -29,6 +29,8 @@ claude mcp add --transport http planfi https://ai.planfi.app/mcp
 
 ## Step 1 — (Optional but preferred) build a plan first to chain context + get a share link
 
+> **Feed it into the forecast (not just plan_id chaining):** `generate_financial_plan` now accepts `student_loans` directly as a plan input, so it flows into net worth, FIRE %, and Monte-Carlo backtesting — the balance reduces net worth and the payment redirects into investing once paid off. Use the standalone analyze tool below for a focused what-if; pass `student_loans` into the plan to see its effect on the whole household forecast.
+
 If the user has (or wants) a full household model, call **`generate_financial_plan`** once and
 **capture the returned `plan_id`**. **All four** debt-and-cashflow tools accept `{ plan_id }` (plus
 inline overrides), so they can resolve age, marginal tax rate, and surplus from the saved plan
