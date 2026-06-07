@@ -1,7 +1,7 @@
 ---
 name: debt-and-cashflow
-version: 1.0.0
-description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, or where the next best dollar of savings should go — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?".
+version: 1.1.0
+description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, where the next best dollar of savings should go, or their optimal student-loan path (which income-driven repayment plan, is PSLF forgiveness worth staying for, or refinance vs aggressive payoff) — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?", "which IDR plan should I be on?", "is PSLF worth staying for?", "should I refinance or pay off my student loans?".
 ---
 
 # Debt and Cashflow
@@ -16,7 +16,7 @@ defaults of its own. Read-only.
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_debt_payoff`):
 `analyze_debt_payoff`, `analyze_mortgage_prepay`, `analyze_refinance`, `analyze_funding_waterfall`,
-plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
+`analyze_student_loans`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
 your environment exposes (bare or `mcp__planfi__`-prefixed); below they are written bare.
 
 If they're NOT available, tell the user to connect the MCP, then continue:
@@ -96,6 +96,26 @@ the ordering (or resolve them via `plan_id`).
 analyze_funding_waterfall({ annual_surplus: 24000, age: 38, marginal_tax_rate: 0.24 })
 ```
 
+### "What's my optimal student-loan path?" → `analyze_student_loans`
+Compares the repayment strategies — standard 10-year, income-driven repayment (IDR), PSLF
+forgiveness (if at a nonprofit/government employer), private refinance, and aggressive payoff —
+returning total cost, payoff/forgiveness timeline, and any forgiveness tax bomb per strategy, plus
+the **recommended path** and an opportunity-cost note (debt rate vs investing the surplus).
+REQUIRED: `loans[]` each `{ balance, rate, loanType }` (rate as a fraction), `agi`. Optional:
+`filingStatus`, `householdSize`, `state`, `employerType` (`nonprofit_gov` unlocks PSLF),
+`refinanceRate` (unlocks the refinance strategy), `extraMonthlyPayment`, `incomeGrowthRate`,
+`investmentReturn`, `monthsAlreadyPaid`, `taxYear`.
+
+```
+analyze_student_loans({
+  loans: [{ balance: 120000, rate: 0.065, loanType: "federal" }],
+  agi: 60000,
+  filingStatus: "single",
+  householdSize: 1,
+  employerType: "nonprofit_gov"
+})
+```
+
 ## Step 3 — Surface results honestly
 
 For whichever tool you called:
@@ -113,13 +133,19 @@ For whichever tool you called:
   available). These commonly chain — e.g. debt payoff → funding waterfall (where the freed-up
   payment goes next), or mortgage prepay → refinance. Use the server-suggested chains rather than
   guessing.
-- **For a share link:** these four tools don't return one. If the user wants a sharable plan, run
-  `generate_financial_plan` (Step 1) and surface its `share_url`.
+- **For a share link:** the four older debt tools don't return one — if the user wants a sharable
+  plan, run `generate_financial_plan` (Step 1) and surface its `share_url`. The newer
+  `analyze_student_loans` is different: it emits a structured `assumed_defaults[]` array (read these
+  back verbatim) and a `share_url` of its own when a plan is in scope.
+- **For `analyze_student_loans`:** lead with the headline (recommended path + total cost + payoff or
+  forgiveness timeline), then list the per-strategy net costs so the tradeoff is visible. Stress that
+  PSLF and IDR forgiveness rules are **policy-sensitive** and can change, and that the forgiveness
+  tax bomb (for non-PSLF IDR forgiveness) is an estimate.
 
 ## Recommended call sequence (typical session)
 
 1. (preferred) `generate_financial_plan` → capture `plan_id` (+ `share_url`).
-2. Route by intent → one of the four tools (with `{ plan_id }` plus the REQUIRED raw fields).
+2. Route by intent → one of the five tools (with `{ plan_id }` plus the REQUIRED raw fields).
 3. Read back the headline + `disclosures.key_assumptions`.
 4. Follow `next_actions[]` — debt/cashflow questions naturally chain (payoff → where the freed-up
    payment goes via `analyze_funding_waterfall`; prepay ↔ refinance), or back to
@@ -143,22 +169,32 @@ break-even month, and flag the term reset (360 vs 312 remaining) lifetime-intere
 `analyze_mortgage_prepay` to compare keeping the old payment as extra principal. Read back
 key_assumptions.
 
-*(Both examples use fictional figures — never reuse a real user's numbers in documentation.)*
+**3.** *"I owe $120k of federal student loans at 6.5%, make $60k, and work for a nonprofit — should I
+chase PSLF or just refinance and pay it down?"*
+→ `analyze_student_loans({ loans: [{ balance: 120000, rate: 0.065, loanType: "federal" }],
+agi: 60000, filingStatus: "single", householdSize: 1, employerType: "nonprofit_gov" })`. Lead with
+the recommended path (likely PSLF here — tax-free forgiveness after 120 qualifying payments makes its
+net cost lowest), the forgiveness timeline, and the per-strategy net costs. Read back the structured
+`assumed_defaults[]`, and flag that PSLF/IDR rules are policy-sensitive. (Add `refinanceRate` to also
+price the refinance path — but note refinancing federal loans forfeits PSLF/IDR protections.)
+
+*(All examples use fictional figures — never reuse a real user's numbers in documentation.)*
 
 ## Notes
 
 - All rates/decimals are fractions; all dollars are today's (real) dollars; tax brackets/limits are
   ~2026.
-- All four tools have REQUIRED inputs that can't be inferred from a plan: `analyze_debt_payoff`
+- All five tools have REQUIRED inputs that can't be inferred from a plan: `analyze_debt_payoff`
   needs the `debts[]` array + `extra_monthly_payment`; `analyze_mortgage_prepay` needs `principal` +
   `mortgage_rate` + `remaining_months`; `analyze_refinance` needs both loans' terms + `closing_costs`;
-  `analyze_funding_waterfall` needs `annual_surplus` + `age` + `marginal_tax_rate`. Ask for them
-  before calling.
+  `analyze_funding_waterfall` needs `annual_surplus` + `age` + `marginal_tax_rate`;
+  `analyze_student_loans` needs the `loans[]` array + `agi`. Ask for them before calling.
 - Pass `{ plan_id }` to reuse a saved household model; any field you also pass is a shallow override.
-  All four tools accept `plan_id`.
-- These four tools surface assumptions as **prose in `disclosures.key_assumptions`**, not a
+- The four older debt tools surface assumptions as **prose in `disclosures.key_assumptions`**, not a
   structured `assumed_defaults[]`, and they do **not** return a `share_url` — chain
-  `generate_financial_plan` for a sharable link. (Server follow-up tracked in `SKILL_AUTHORING.md`.)
+  `generate_financial_plan` for a sharable link. The newer `analyze_student_loans` differs: it emits
+  a structured `assumed_defaults[]` array and its own `share_url` when a plan is in scope. (Server
+  follow-up for the older four tracked in `SKILL_AUTHORING.md`.)
 - A guaranteed return (paying off debt / mortgage prepay at rate r) is risk-free; the prepay-vs-
   invest verdict depends on the assumed investment return the server reports — surface it.
 - Not financial advice. Planning estimates only.

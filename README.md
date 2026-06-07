@@ -1,6 +1,8 @@
 # debt-and-cashflow (Claude Agent Skill)
 
-Pay down debt and route surplus cash optimally: avalanche/snowball debt payoff order, mortgage prepay vs invest, refinance break-even, and a next-best-dollar funding waterfall. Thin orchestration over the planfi MCP.
+Pay down debt and route surplus cash optimally: avalanche/snowball debt payoff order, mortgage prepay vs invest, refinance break-even, a next-best-dollar funding waterfall, and an optimal student-loan path (IDR / PSLF / refinance vs aggressive payoff). Thin orchestration over the planfi MCP.
+
+- **Student loans** — `analyze_student_loans`: compares standard, income-driven repayment (IDR), PSLF forgiveness, refinance, and aggressive payoff; returns total cost + payoff/forgiveness timeline per strategy and the recommended path.
 
 It's a **thin orchestration layer** over the public **planfi MCP** (`https://ai.planfi.app/mcp`,
 public, no auth) — all the math and financial logic live server-side. The skill itself bundles no
