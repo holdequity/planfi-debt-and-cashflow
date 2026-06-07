@@ -35,8 +35,10 @@ If the user has (or wants) a full household model, call **`generate_financial_pl
 **capture the returned `plan_id`**. **All four** debt-and-cashflow tools accept `{ plan_id }` (plus
 inline overrides), so they can resolve age, marginal tax rate, and surplus from the saved plan
 instead of you re-sending every figure. `generate_financial_plan` also returns a **`share_url`**
-(planfi.app) — none of the four tools below emit a share link themselves, so this is the way to give
-the user one.
+(planfi.app). Two of the four tools below emit a `share_url` of their own — but only when called
+with a `plan_id` that resolves to a plan with earners (`analyze_funding_waterfall` and
+`analyze_student_loans`); `analyze_debt_payoff`, `analyze_mortgage_prepay`, and `analyze_refinance`
+never emit one, so for those, run `generate_financial_plan` to give the user a share link.
 
 This step is optional: every tool below runs from raw inputs too. Prefer the plan path when the
 session already has a model, when the user is asking more than one of these questions, or when they
@@ -68,8 +70,8 @@ analyze_debt_payoff({
 ### "Should I prepay my mortgage or invest the difference?" → `analyze_mortgage_prepay`
 Compares paying extra principal (guaranteed return = the mortgage rate) against investing that money,
 returning interest saved, months shaved off, and the prepay-vs-invest crossover.
-REQUIRED: `principal`, `mortgage_rate`, `remaining_months`. Optional: `extra_monthly_payment`,
-`expected_investment_return`, `marginal_tax_rate`.
+REQUIRED: `principal`, `mortgage_rate`, `remaining_months`. Optional: `extra_monthly`, `lump_sum`,
+`expected_investment_return`, `marginal_tax_rate`, `itemizes_deductions`, `tax_year`.
 
 ```
 analyze_mortgage_prepay({ principal: 280000, mortgage_rate: 0.068, remaining_months: 312 })
@@ -103,18 +105,22 @@ Compares the repayment strategies — standard 10-year, income-driven repayment 
 forgiveness (if at a nonprofit/government employer), private refinance, and aggressive payoff —
 returning total cost, payoff/forgiveness timeline, and any forgiveness tax bomb per strategy, plus
 the **recommended path** and an opportunity-cost note (debt rate vs investing the surplus).
-REQUIRED: `loans[]` each `{ balance, rate, loanType }` (rate as a fraction), `agi`. Optional:
-`filingStatus`, `householdSize`, `state`, `employerType` (`nonprofit_gov` unlocks PSLF),
-`refinanceRate` (unlocks the refinance strategy), `extraMonthlyPayment`, `incomeGrowthRate`,
-`investmentReturn`, `monthsAlreadyPaid`, `taxYear`.
+Nothing is strictly REQUIRED — every field has a server-side default — but for a meaningful answer
+always pass the loans and income. Provide either `loans[]` each `{ balance, rate, loan_type }` (rate
+as a fraction; `loan_type` is `federal`|`private`, default `federal`) OR the single-loan scalars
+`balance` + `rate`; and `annual_income` (the AGI). Optional: `filing_status` (`single`|`married_joint`),
+`family_size`, `state`, `employer_type` (`nonprofit_gov`|`forprofit`; `nonprofit_gov` unlocks PSLF),
+`refinance_rate` (unlocks the refinance strategy), `refinance_term_months`, `extra_monthly_payment`,
+`income_growth_rate`, `idr_multiplier`, `idr_payment_rate`, `forgiveness_months`, `pslf_payments_made`,
+`tax_year`, `plan_id`. (The invest-instead return is fixed server-side at 7% — there is no input for it.)
 
 ```
 analyze_student_loans({
-  loans: [{ balance: 120000, rate: 0.065, loanType: "federal" }],
-  agi: 60000,
-  filingStatus: "single",
-  householdSize: 1,
-  employerType: "nonprofit_gov"
+  loans: [{ balance: 120000, rate: 0.065, loan_type: "federal" }],
+  annual_income: 60000,
+  filing_status: "single",
+  family_size: 1,
+  employer_type: "nonprofit_gov"
 })
 ```
 
@@ -125,20 +131,26 @@ For whichever tool you called:
   prepay-vs-invest verdict + interest saved / months shaved; the refinance monthly savings + the
   **break-even month** (and whether the user expects to hold the loan that long); or the ranked
   funding-waterfall destinations.
-- **Read back `disclosures.key_assumptions`** verbatim. These tools do **not** emit a structured
-  `assumed_defaults[]` array — instead they apply silent Zod defaults (e.g. expected investment
-  return, payment-application timing, marginal tax rate) and expose what they assumed only as
-  **prose in `disclosures.key_assumptions`**. Surface those so the user can correct any silent
-  assumption.
-- Honor `disclosures.not_advice` — present as planning estimates, not financial advice.
+- **Read back the `assumed_defaults[]` array** verbatim. Every one of these tools returns a
+  structured `assumed_defaults[]` in its payload — each entry is `{ field, assumed_value, note }`
+  covering forecast-driving inputs the caller omitted (e.g. `investment_return` 0.07,
+  `marginal_tax_rate`, `itemizes_deductions`, `old_monthly_pi`, `filing_status`, etc.). Surface these
+  so the user can correct any silent assumption. `disclosures.key_assumptions` is a SEPARATE block of
+  static prose describing the tool's methodology — read it for context, but the per-call assumptions
+  to confirm with the user live in `assumed_defaults[]`.
+- Honor `disclosures.not_advice` — it is a **boolean** flag (not a message). When true, present the
+  output as planning estimates, not financial advice.
 - **Follow `next_actions[]`** — each is `{ tool, why, prefilled_args }` (carrying `{ plan_id }` when
-  available). These commonly chain — e.g. debt payoff → funding waterfall (where the freed-up
-  payment goes next), or mortgage prepay → refinance. Use the server-suggested chains rather than
-  guessing.
-- **For a share link:** the four older debt tools don't return one — if the user wants a sharable
-  plan, run `generate_financial_plan` (Step 1) and surface its `share_url`. The newer
-  `analyze_student_loans` is different: it emits a structured `assumed_defaults[]` array (read these
-  back verbatim) and a `share_url` of its own when a plan is in scope.
+  available). The actual server-defined chains for these tools are: `analyze_debt_payoff` →
+  `analyze_student_loans`; `analyze_funding_waterfall` → `analyze_student_loans`;
+  `analyze_student_loans` → `analyze_refinance` and `analyze_student_loans` → `analyze_funding_waterfall`.
+  (`analyze_mortgage_prepay` and `analyze_refinance` have no outgoing edges.) Use whatever the tool
+  actually returns rather than guessing.
+- **For a share link:** `analyze_funding_waterfall` and `analyze_student_loans` each return a
+  `share_url` of their own, but only when called with a `plan_id` that resolves to a plan with
+  earners. `analyze_debt_payoff`, `analyze_mortgage_prepay`, and `analyze_refinance` never return one
+  — if the user wants a sharable plan for those, run `generate_financial_plan` (Step 1) and surface
+  its `share_url`.
 - **For `analyze_student_loans`:** lead with the headline (recommended path + total cost + payoff or
   forgiveness timeline), then list the per-strategy net costs so the tradeoff is visible. Stress that
   PSLF and IDR forgiveness rules are **policy-sensitive** and can change, and that the forgiveness
@@ -148,10 +160,10 @@ For whichever tool you called:
 
 1. (preferred) `generate_financial_plan` → capture `plan_id` (+ `share_url`).
 2. Route by intent → one of the five tools (with `{ plan_id }` plus the REQUIRED raw fields).
-3. Read back the headline + `disclosures.key_assumptions`.
-4. Follow `next_actions[]` — debt/cashflow questions naturally chain (payoff → where the freed-up
-   payment goes via `analyze_funding_waterfall`; prepay ↔ refinance), or back to
-   `generate_financial_plan` for a share link.
+3. Read back the headline + the `assumed_defaults[]` array.
+4. Follow `next_actions[]` — debt/cashflow questions naturally chain (debt payoff → student-loan
+   path; funding waterfall → student-loan path; student-loan path → refinance or funding waterfall),
+   or run `generate_financial_plan` for a share link.
 
 ## Fictional examples
 
@@ -159,26 +171,29 @@ For whichever tool you called:
 my payoff order?"*
 → `analyze_debt_payoff({ debts: [{ name: "Visa", balance: 9000, rate: 0.22, min_payment: 250 },
 { name: "Car loan", balance: 14000, rate: 0.06, min_payment: 320 }], extra_monthly_payment: 400 })`.
-Lead with the avalanche order (card first), months to debt-free, and interest saved vs snowball;
-chain `analyze_funding_waterfall` for where the freed-up payment should go once the card is paid.
-Read back key_assumptions (payment timing, whether order is avalanche vs snowball).
+Lead with the avalanche order (card first), months to debt-free, and interest saved vs snowball.
+Read back the `assumed_defaults[]` (e.g. the assumed `investment_return` driving the invest-instead
+comparison). The tool's `next_actions[]` chains `analyze_student_loans` — useful if any of the debts
+are student loans with IDR/PSLF options.
 
 **2.** *"$280k mortgage at 6.8%, refi to 5.9% costs $6k in closing — is it worth it and when do I
 break even?"*
 → `analyze_refinance({ principal: 280000, old_rate: 0.068, old_remaining_months: 312,
 new_rate: 0.059, new_term_months: 360, closing_costs: 6000 })`. Lead with the monthly savings and the
-break-even month, and flag the term reset (360 vs 312 remaining) lifetime-interest tradeoff; offer
-`analyze_mortgage_prepay` to compare keeping the old payment as extra principal. Read back
-key_assumptions.
+break-even month, and flag the term reset (360 vs 312 remaining) lifetime-interest tradeoff. Read
+back the `assumed_defaults[]` (e.g. the `old_monthly_pi` derived from balance/rate/term that the
+refinance is compared against). You can separately offer `analyze_mortgage_prepay` to compare keeping
+the old payment as extra principal — note this isn't a server-suggested `next_actions[]` edge.
 
 **3.** *"I owe $120k of federal student loans at 6.5%, make $60k, and work for a nonprofit — should I
 chase PSLF or just refinance and pay it down?"*
-→ `analyze_student_loans({ loans: [{ balance: 120000, rate: 0.065, loanType: "federal" }],
-agi: 60000, filingStatus: "single", householdSize: 1, employerType: "nonprofit_gov" })`. Lead with
-the recommended path (likely PSLF here — tax-free forgiveness after 120 qualifying payments makes its
-net cost lowest), the forgiveness timeline, and the per-strategy net costs. Read back the structured
-`assumed_defaults[]`, and flag that PSLF/IDR rules are policy-sensitive. (Add `refinanceRate` to also
-price the refinance path — but note refinancing federal loans forfeits PSLF/IDR protections.)
+→ `analyze_student_loans({ loans: [{ balance: 120000, rate: 0.065, loan_type: "federal" }],
+annual_income: 60000, filing_status: "single", family_size: 1, employer_type: "nonprofit_gov" })`.
+Lead with the recommended path (likely PSLF here — tax-free forgiveness after 120 qualifying payments
+makes its net cost lowest), the forgiveness timeline, and the per-strategy net costs. Read back the
+structured `assumed_defaults[]`, and flag that PSLF/IDR rules are policy-sensitive. (Add
+`refinance_rate` to also price the refinance path — but note refinancing federal loans forfeits
+PSLF/IDR protections.)
 
 *(All examples use fictional figures — never reuse a real user's numbers in documentation.)*
 
@@ -186,17 +201,21 @@ price the refinance path — but note refinancing federal loans forfeits PSLF/ID
 
 - All rates/decimals are fractions; all dollars are today's (real) dollars; tax brackets/limits are
   ~2026.
-- All five tools have REQUIRED inputs that can't be inferred from a plan: `analyze_debt_payoff`
-  needs the `debts[]` array + `extra_monthly_payment`; `analyze_mortgage_prepay` needs `principal` +
-  `mortgage_rate` + `remaining_months`; `analyze_refinance` needs both loans' terms + `closing_costs`;
-  `analyze_funding_waterfall` needs `annual_surplus` + `age` + `marginal_tax_rate`;
-  `analyze_student_loans` needs the `loans[]` array + `agi`. Ask for them before calling.
+- Inputs that can't be inferred from a plan, by tool: `analyze_debt_payoff` requires the `debts[]`
+  array + `extra_monthly_payment`; `analyze_mortgage_prepay` requires `principal` + `mortgage_rate` +
+  `remaining_months`; `analyze_refinance` requires `principal` + `old_rate` + `old_remaining_months`
+  + `new_rate` + `new_term_months` + `closing_costs`; `analyze_funding_waterfall` requires
+  `annual_surplus` + `age` + `marginal_tax_rate`. `analyze_student_loans` has no strictly-required
+  field (all default server-side) but is only meaningful when you pass the loans (`loans[]` or
+  `balance`/`rate`) + `annual_income`. Ask for the meaningful inputs before calling.
 - Pass `{ plan_id }` to reuse a saved household model; any field you also pass is a shallow override.
-- The four older debt tools surface assumptions as **prose in `disclosures.key_assumptions`**, not a
-  structured `assumed_defaults[]`, and they do **not** return a `share_url` — chain
-  `generate_financial_plan` for a sharable link. The newer `analyze_student_loans` differs: it emits
-  a structured `assumed_defaults[]` array and its own `share_url` when a plan is in scope. (Server
-  follow-up for the older four tracked in `SKILL_AUTHORING.md`.)
+- All five tools return a structured `assumed_defaults[]` array (`{ field, assumed_value, note }`) in
+  their payload — read it back so the user can correct silent defaults. `disclosures.key_assumptions`
+  is separate static methodology prose, and `disclosures.not_advice` is a boolean flag. On share
+  links: `analyze_funding_waterfall` and `analyze_student_loans` return their own `share_url` when
+  called with a `plan_id` resolving to a plan with earners; `analyze_debt_payoff`,
+  `analyze_mortgage_prepay`, and `analyze_refinance` do not — chain `generate_financial_plan` for a
+  sharable link.
 - A guaranteed return (paying off debt / mortgage prepay at rate r) is risk-free; the prepay-vs-
   invest verdict depends on the assumed investment return the server reports — surface it.
 - Not financial advice. Planning estimates only.
