@@ -1,7 +1,7 @@
 ---
 name: debt-and-cashflow
-version: 1.2.0
-description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, where the next best dollar of savings should go, their optimal student-loan path (which income-driven repayment plan, is PSLF forgiveness worth staying for, or refinance vs aggressive payoff), or how big their emergency fund / cash runway should be (and whether they're holding too much cash) — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?", "which IDR plan should I be on?", "is PSLF worth staying for?", "should I refinance or pay off my student loans?", "how many months of emergency fund do I need?", "do I have too much cash sitting around?".
+version: 1.3.0
+description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to consolidate high-rate revolving / credit-card debt into a personal loan or a 0% balance transfer (and whether the transfer fee is worth it), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, where the next best dollar of savings should go, their optimal student-loan path (which income-driven repayment plan, is PSLF forgiveness worth staying for, or refinance vs aggressive payoff), or how big their emergency fund / cash runway should be (and whether they're holding too much cash) — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I consolidate my credit cards into a personal loan?", "is a 0% balance transfer worth the 3% fee?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?", "which IDR plan should I be on?", "is PSLF worth staying for?", "should I refinance or pay off my student loans?", "how many months of emergency fund do I need?", "do I have too much cash sitting around?".
 ---
 
 # Debt and Cashflow
@@ -15,7 +15,7 @@ defaults of its own. Read-only.
 ## Step 0 — Make sure the planfi tools are connected
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_debt_payoff`):
-`analyze_debt_payoff`, `analyze_mortgage_prepay`, `analyze_refinance`, `analyze_funding_waterfall`,
+`analyze_debt_payoff`, `analyze_debt_consolidation`, `analyze_mortgage_prepay`, `analyze_refinance`, `analyze_funding_waterfall`,
 `analyze_student_loans`, `analyze_emergency_fund`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
 your environment exposes (bare or `mcp__planfi__`-prefixed); below they are written bare.
 
@@ -67,6 +67,36 @@ analyze_debt_payoff({
 })
 ```
 
+Once you have a payoff order, if the high-rate debts are revolving (credit cards), consider
+`analyze_debt_consolidation` (below) to see whether rolling them into a personal loan or a 0%
+balance transfer beats the status quo.
+
+### "Should I consolidate my high-rate debt / is a balance transfer worth it?" → `analyze_debt_consolidation`
+Weighs rolling high-APR revolving (credit-card) debt into a **personal loan** or a **0% balance
+transfer** (new rate + fees + intro period) against the status quo, holding the monthly budget
+constant for an equal-effort compare. Returns months-to-debt-free, total interest, total fees, and
+total cost per option, plus the interest-plus-fees and months saved vs status quo, and the
+**recommended** option (lowest total cost). Engine aggregates the balances into a single
+weighted-APR revolving leg.
+REQUIRED: `balances[]` each `{ name (optional), balance, apr, min_payment (optional) }`,
+`monthly_payment` (the fixed total budget reused across every option), and **at least one** of
+`personal_loan` `{ rate, term_months, origination_fee_pct?, finance_fee? }` or
+`balance_transfer` `{ intro_months, go_to_apr, transfer_fee_pct?, finance_fee? }`.
+`{ plan_id }` optional. All rates are **fractions** (24% APR → `0.24`); all dollars are today's
+(real) dollars.
+
+```
+analyze_debt_consolidation({
+  balances: [{ name: "Visa", balance: 15000, apr: 0.24, min_payment: 300 }],
+  monthly_payment: 500,
+  personal_loan: { rate: 0.11, term_months: 36, origination_fee_pct: 0.03 },
+  balance_transfer: { intro_months: 18, go_to_apr: 0.22, transfer_fee_pct: 0.03 }
+})
+```
+
+Cross-links: after consolidating, run `analyze_debt_payoff` (next step — order any remaining debts)
+and `analyze_funding_waterfall` (route the freed-up monthly budget to the next-best dollar).
+
 ### "Should I prepay my mortgage or invest the difference?" → `analyze_mortgage_prepay`
 Compares paying extra principal (guaranteed return = the mortgage rate) against investing that money,
 returning interest saved, months shaved off, and the prepay-vs-invest crossover.
@@ -112,6 +142,10 @@ the ordering (or resolve them via `plan_id`).
 ```
 analyze_funding_waterfall({ annual_surplus: 24000, age: 38, marginal_tax_rate: 0.24 })
 ```
+
+Cross-link: if high-rate revolving debt is competing for that surplus, run
+`analyze_debt_consolidation` first to see whether a personal loan or 0% balance transfer lowers the
+cost of clearing it before routing the rest.
 
 ### "What's my optimal student-loan path?" → `analyze_student_loans`
 Compares the repayment strategies — standard 10-year, income-driven repayment (IDR), PSLF
