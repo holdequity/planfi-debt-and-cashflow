@@ -1,6 +1,6 @@
 ---
 name: debt-and-cashflow
-version: 1.3.0
+version: 1.4.0
 description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to consolidate high-rate revolving / credit-card debt into a personal loan or a 0% balance transfer (and whether the transfer fee is worth it), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, where the next best dollar of savings should go, their optimal student-loan path (which income-driven repayment plan, is PSLF forgiveness worth staying for, or refinance vs aggressive payoff), or how big their emergency fund / cash runway should be (and whether they're holding too much cash) — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I consolidate my credit cards into a personal loan?", "is a 0% balance transfer worth the 3% fee?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?", "which IDR plan should I be on?", "is PSLF worth staying for?", "should I refinance or pay off my student loans?", "how many months of emergency fund do I need?", "do I have too much cash sitting around?".
 ---
 
@@ -16,7 +16,7 @@ defaults of its own. Read-only.
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_debt_payoff`):
 `analyze_debt_payoff`, `analyze_debt_consolidation`, `analyze_mortgage_prepay`, `analyze_refinance`, `analyze_funding_waterfall`,
-`analyze_student_loans`, `analyze_emergency_fund`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
+`analyze_student_loans`, `analyze_emergency_fund`, `analyze_auto_purchase`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
 your environment exposes (bare or `mcp__planfi__`-prefixed); below they are written bare.
 
 If they're NOT available, tell the user to connect the MCP, then continue:
@@ -120,6 +120,28 @@ analyze_refinance({
 })
 ```
 
+### "Should I finance, lease, or pay cash for a car?" → `analyze_auto_purchase`
+Compares financing, leasing, and paying cash for a vehicle in real-dollar net cost over the holding
+period (net of resale value, loan interest, and the opportunity cost of cash tied up vs invested),
+and names the cheapest option. Returns the per-option net cost, the loan principal / monthly payment /
+total interest, the depreciated resale value, and the cash opportunity cost. Pass `{ plan_id }` for
+household context; nothing is strictly required (every field has a server-side default).
+
+```
+analyze_auto_purchase({
+  vehicle_price: 42000,
+  down_payment: 5000,
+  loan_apr: 0.069,
+  loan_term_months: 72,
+  lease_monthly: 480,
+  lease_term_months: 36,
+  holding_period_months: 72
+})
+```
+
+Cross-link: this is a natural follow-on from `analyze_debt_payoff` (before taking on a new car loan),
+and its `next_actions[]` chains `generate_financial_plan` to fold the loan into the full forecast.
+
 ### "How big should my emergency fund be?" / "Do I have too much cash?" → `analyze_emergency_fund`
 Sizes a months-of-runway target from job stability, dependents, single-vs-dual income, and
 income variability, then checks it against current cash — flagging a shortfall, an adequate
@@ -192,13 +214,16 @@ For whichever tool you called:
   `analyze_student_loans`; `analyze_funding_waterfall` → `analyze_student_loans`;
   `analyze_student_loans` → `analyze_refinance` and `analyze_student_loans` → `analyze_funding_waterfall`;
   `analyze_emergency_fund` → `analyze_funding_waterfall` and `analyze_emergency_fund` →
-  `analyze_debt_payoff`; and `analyze_debt_payoff` → `analyze_emergency_fund`.
+  `analyze_debt_payoff`; and `analyze_debt_payoff` → `analyze_emergency_fund`. For cars:
+  `analyze_debt_payoff` → `analyze_auto_purchase`, and `analyze_auto_purchase` →
+  `generate_financial_plan` (fold the car loan into the full FIRE timeline).
   (`analyze_mortgage_prepay` and `analyze_refinance` have no outgoing edges.) Use whatever the tool
   actually returns rather than guessing.
 - **For a share link:** `analyze_funding_waterfall`, `analyze_student_loans`, and
   `analyze_emergency_fund` each return a `share_url` of their own, but only when called with a
   `plan_id` that resolves to a plan with earners. `analyze_debt_payoff`, `analyze_mortgage_prepay`,
-  and `analyze_refinance` never return one
+  `analyze_refinance`, and `analyze_auto_purchase` never return one (`analyze_auto_purchase` is a
+  scalar what-if in v1)
   — if the user wants a sharable plan for those, run `generate_financial_plan` (Step 1) and surface
   its `share_url`.
 - **For `analyze_student_loans`:** lead with the headline (recommended path + total cost + payoff or
