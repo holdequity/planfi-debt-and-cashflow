@@ -1,7 +1,7 @@
 {
   "name": "debt-and-cashflow",
-  "version": "1.0.0",
-  "description": "Pay down debt and route surplus cash optimally: avalanche/snowball debt payoff order, mortgage prepay vs invest, refinance break-even, and a next-best-dollar funding waterfall. Thin orchestration over the planfi MCP.",
+  "version": "1.2.0",
+  "description": "Pay down debt and route surplus cash optimally: avalanche/snowball debt payoff order, mortgage prepay vs invest, refinance break-even, a next-best-dollar funding waterfall, student-loan strategy (IDR / PSLF / refinance vs aggressive payoff), and emergency-fund / cash-runway sizing. Thin orchestration over the planfi MCP.",
   "license": "MIT",
   "author": {
     "name": "holdequity",
@@ -16,6 +16,9 @@
     "mortgage-prepay",
     "refinance",
     "funding-waterfall",
+    "student-loans",
+    "emergency-fund",
+    "cash-runway",
     "cashflow"
   ]
 }

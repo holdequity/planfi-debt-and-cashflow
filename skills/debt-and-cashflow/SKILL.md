@@ -1,7 +1,7 @@
 ---
 name: debt-and-cashflow
-version: 1.1.0
-description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, where the next best dollar of savings should go, or their optimal student-loan path (which income-driven repayment plan, is PSLF forgiveness worth staying for, or refinance vs aggressive payoff) — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?", "which IDR plan should I be on?", "is PSLF worth staying for?", "should I refinance or pay off my student loans?".
+version: 1.2.0
+description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, where the next best dollar of savings should go, their optimal student-loan path (which income-driven repayment plan, is PSLF forgiveness worth staying for, or refinance vs aggressive payoff), or how big their emergency fund / cash runway should be (and whether they're holding too much cash) — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?", "which IDR plan should I be on?", "is PSLF worth staying for?", "should I refinance or pay off my student loans?", "how many months of emergency fund do I need?", "do I have too much cash sitting around?".
 ---
 
 # Debt and Cashflow
@@ -16,7 +16,7 @@ defaults of its own. Read-only.
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_debt_payoff`):
 `analyze_debt_payoff`, `analyze_mortgage_prepay`, `analyze_refinance`, `analyze_funding_waterfall`,
-`analyze_student_loans`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
+`analyze_student_loans`, `analyze_emergency_fund`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
 your environment exposes (bare or `mcp__planfi__`-prefixed); below they are written bare.
 
 If they're NOT available, tell the user to connect the MCP, then continue:
@@ -90,6 +90,19 @@ analyze_refinance({
 })
 ```
 
+### "How big should my emergency fund be?" / "Do I have too much cash?" → `analyze_emergency_fund`
+Sizes a months-of-runway target from job stability, dependents, single-vs-dual income, and
+income variability, then checks it against current cash — flagging a shortfall, an adequate
+cushion, or excess cash dragging against investing. REQUIRED: `monthly_fixed_expenses`.
+
+```
+analyze_emergency_fund({
+  monthly_fixed_expenses: 4200, monthly_variable_expenses: 1500,
+  job_stability: "volatile", dependents: 2,
+  income_type: "single", income_variability: "variable", current_cash: 22000
+})
+```
+
 ### "Where should my extra savings go?" → `analyze_funding_waterfall`
 Ranks the next-best-dollar destinations (e.g. high-interest debt → employer-match → HSA → tax-
 advantaged → taxable) for a given surplus.
@@ -143,12 +156,15 @@ For whichever tool you called:
 - **Follow `next_actions[]`** — each is `{ tool, why, prefilled_args }` (carrying `{ plan_id }` when
   available). The actual server-defined chains for these tools are: `analyze_debt_payoff` →
   `analyze_student_loans`; `analyze_funding_waterfall` → `analyze_student_loans`;
-  `analyze_student_loans` → `analyze_refinance` and `analyze_student_loans` → `analyze_funding_waterfall`.
+  `analyze_student_loans` → `analyze_refinance` and `analyze_student_loans` → `analyze_funding_waterfall`;
+  `analyze_emergency_fund` → `analyze_funding_waterfall` and `analyze_emergency_fund` →
+  `analyze_debt_payoff`; and `analyze_debt_payoff` → `analyze_emergency_fund`.
   (`analyze_mortgage_prepay` and `analyze_refinance` have no outgoing edges.) Use whatever the tool
   actually returns rather than guessing.
-- **For a share link:** `analyze_funding_waterfall` and `analyze_student_loans` each return a
-  `share_url` of their own, but only when called with a `plan_id` that resolves to a plan with
-  earners. `analyze_debt_payoff`, `analyze_mortgage_prepay`, and `analyze_refinance` never return one
+- **For a share link:** `analyze_funding_waterfall`, `analyze_student_loans`, and
+  `analyze_emergency_fund` each return a `share_url` of their own, but only when called with a
+  `plan_id` that resolves to a plan with earners. `analyze_debt_payoff`, `analyze_mortgage_prepay`,
+  and `analyze_refinance` never return one
   — if the user wants a sharable plan for those, run `generate_financial_plan` (Step 1) and surface
   its `share_url`.
 - **For `analyze_student_loans`:** lead with the headline (recommended path + total cost + payoff or
@@ -159,11 +175,14 @@ For whichever tool you called:
 ## Recommended call sequence (typical session)
 
 1. (preferred) `generate_financial_plan` → capture `plan_id` (+ `share_url`).
-2. Route by intent → one of the five tools (with `{ plan_id }` plus the REQUIRED raw fields).
+2. Route by intent → one of the six tools (with `{ plan_id }` plus the REQUIRED raw fields).
+   When routing surplus cash, check `analyze_emergency_fund` (is the cash cushion right-sized?)
+   before `analyze_funding_waterfall` (where the next dollar goes).
 3. Read back the headline + the `assumed_defaults[]` array.
 4. Follow `next_actions[]` — debt/cashflow questions naturally chain (debt payoff → student-loan
-   path; funding waterfall → student-loan path; student-loan path → refinance or funding waterfall),
-   or run `generate_financial_plan` for a share link.
+   path; funding waterfall → student-loan path; student-loan path → refinance or funding waterfall;
+   emergency-fund check → funding waterfall or debt payoff), or run `generate_financial_plan` for a
+   share link.
 
 ## Fictional examples
 
@@ -205,17 +224,20 @@ PSLF/IDR protections.)
   array + `extra_monthly_payment`; `analyze_mortgage_prepay` requires `principal` + `mortgage_rate` +
   `remaining_months`; `analyze_refinance` requires `principal` + `old_rate` + `old_remaining_months`
   + `new_rate` + `new_term_months` + `closing_costs`; `analyze_funding_waterfall` requires
-  `annual_surplus` + `age` + `marginal_tax_rate`. `analyze_student_loans` has no strictly-required
+  `annual_surplus` + `age` + `marginal_tax_rate`; `analyze_emergency_fund` requires
+  `monthly_fixed_expenses`. `analyze_student_loans` has no strictly-required
   field (all default server-side) but is only meaningful when you pass the loans (`loans[]` or
   `balance`/`rate`) + `annual_income`. Ask for the meaningful inputs before calling.
 - Pass `{ plan_id }` to reuse a saved household model; any field you also pass is a shallow override.
-- All five tools return a structured `assumed_defaults[]` array (`{ field, assumed_value, note }`) in
+- All six tools return a structured `assumed_defaults[]` array (`{ field, assumed_value, note }`) in
   their payload — read it back so the user can correct silent defaults. `disclosures.key_assumptions`
   is separate static methodology prose, and `disclosures.not_advice` is a boolean flag. On share
-  links: `analyze_funding_waterfall` and `analyze_student_loans` return their own `share_url` when
-  called with a `plan_id` resolving to a plan with earners; `analyze_debt_payoff`,
-  `analyze_mortgage_prepay`, and `analyze_refinance` do not — chain `generate_financial_plan` for a
-  sharable link.
+  links: `analyze_funding_waterfall`, `analyze_student_loans`, and `analyze_emergency_fund` return
+  their own `share_url` when called with a `plan_id` resolving to a plan with earners;
+  `analyze_debt_payoff`, `analyze_mortgage_prepay`, and `analyze_refinance` do not — chain
+  `generate_financial_plan` for a sharable link.
+- Server-defined `next_actions[]` edges for `analyze_emergency_fund` are → `analyze_funding_waterfall`
+  and → `analyze_debt_payoff` (and `analyze_debt_payoff` → `analyze_emergency_fund`).
 - A guaranteed return (paying off debt / mortgage prepay at rate r) is risk-free; the prepay-vs-
   invest verdict depends on the assumed investment return the server reports — surface it.
 - Not financial advice. Planning estimates only.
