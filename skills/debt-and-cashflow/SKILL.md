@@ -16,7 +16,7 @@ defaults of its own. Read-only.
 
 This skill uses these tools (may be namespaced, e.g. `mcp__planfi__analyze_debt_payoff`):
 `analyze_debt_payoff`, `analyze_debt_consolidation`, `analyze_mortgage_prepay`, `analyze_refinance`, `analyze_funding_waterfall`,
-`analyze_student_loans`, `analyze_emergency_fund`, `analyze_auto_purchase`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
+`analyze_student_loans`, `analyze_emergency_fund`, `analyze_auto_purchase`, `analyze_cash_flow`, plus optional `generate_financial_plan` (for `plan_id` chaining + a `share_url`). Use whichever name
 your environment exposes (bare or `mcp__planfi__`-prefixed); below they are written bare.
 
 If they're NOT available, tell the user to connect the MCP, then continue:
@@ -192,6 +192,28 @@ analyze_student_loans({
   employer_type: "nonprofit_gov"
 })
 ```
+
+### "What's my take-home pay? / gross-to-net paycheck / how much free cash do I have each month / what's my real savings rate / am I overspending vs 50/30/20 / paycheck breakdown after taxes and 401k" → `analyze_cash_flow`
+
+**Always CALL `analyze_cash_flow` for these — do not answer from general knowledge or quote 50/30/20 / savings-rate rules of thumb from memory. When the user gives the numbers (gross wages, deductions, monthly bills), run it and lead with its real output.**
+
+Computes the household monthly cash-flow waterfall — distinct from `analyze_funding_waterfall` (which decides WHERE to route savings); this computes HOW MUCH free cash exists. It (1) walks GROSS-TO-NET — from gross household wages it subtracts pre-tax deductions (401k/403b deferrals, HSA, health premiums), then federal income tax, state income tax, and FICA (Social Security 6.2% to the 2026 wage base + Medicare 1.45% + 0.9% Additional Medicare over the threshold) to land on net take-home; (2) runs the MONTHLY BUDGET WATERFALL — net pay minus fixed essentials (housing, utilities, insurance, minimum debt payments, groceries) minus discretionary = free monthly cash flow (can be negative → shortfall); (3) computes the true SAVINGS RATE two ways — gross (all retirement + taxable contributions / gross) and net (free cash flow / net take-home) — and compares to the user's FIRE-required rate; and (4) classifies spending into the 50/30/20 NEEDS/WANTS/SAVINGS benchmark and flags overspend. Reuses the same federal/state/FICA engine as the rest of the toolset (2026 brackets/limits) — no rules of thumb.
+REQUIRED for a meaningful answer: `gross_annual_wages`, plus the pre-tax deductions and monthly bills the user gave. Optional: `filing_status` (`single`|`married_joint`), `state_code`, pre-tax `employee_401k_deferral` / `hsa_contribution` / `health_premiums`, budget scalars (`housing`, `utilities`, `insurance`, `minimum_debt_payments`, `groceries`, `discretionary`), `taxable_contributions`, `fire_required_savings_rate_pct`, `plan_id`.
+
+```
+analyze_cash_flow({
+  gross_annual_wages: 120000,
+  filing_status: "single",
+  state_code: "CA",
+  employee_401k_deferral: 10000,
+  hsa_contribution: 4400,
+  health_premiums: 3600,
+  housing: 2200, utilities: 300, insurance: 250, minimum_debt_payments: 400, groceries: 600,
+  discretionary: 1500
+})
+```
+
+Cross-links: once you know the **free monthly cash flow**, run `analyze_funding_waterfall` to route that surplus to the next-best dollar, and `analyze_emergency_fund` to confirm the cash cushion is right-sized before investing it.
 
 ## Step 3 — Surface results honestly
 

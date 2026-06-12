@@ -12,8 +12,8 @@
     {
       "name": "debt-and-cashflow",
       "source": "./skills/debt-and-cashflow",
-      "description": "Pay down debt and route surplus cash optimally: avalanche/snowball debt payoff order, balance-transfer / debt-consolidation break-even (personal loan vs 0% transfer vs status quo), mortgage prepay vs invest, refinance break-even, a next-best-dollar funding waterfall, student-loan strategy (IDR / PSLF / refinance vs aggressive payoff), emergency-fund / cash-runway sizing (months-of-runway target from job stability, dependents, and income type, plus a too-much-cash check), and finance vs lease vs pay-cash car analysis (real-dollar net cost over your hold horizon, net of resale, interest, and the opportunity cost of cash). Thin orchestration over the planfi MCP.",
-      "version": "1.4.0",
+      "description": "Pay down debt and route surplus cash optimally: avalanche/snowball debt payoff order, balance-transfer / debt-consolidation break-even (personal loan vs 0% transfer vs status quo), mortgage prepay vs invest, refinance break-even, a next-best-dollar funding waterfall, student-loan strategy (IDR / PSLF / refinance vs aggressive payoff), emergency-fund / cash-runway sizing (months-of-runway target from job stability, dependents, and income type, plus a too-much-cash check), finance vs lease vs pay-cash car analysis (real-dollar net cost over your hold horizon, net of resale, interest, and the opportunity cost of cash), and a household cash-flow / take-home analyzer (gross-to-net paycheck after pre-tax deductions, federal/state/FICA tax, the monthly free-cash-flow budget waterfall, true gross & net savings rates vs your FIRE target, and a 50/30/20 needs/wants/savings overspend check). Thin orchestration over the planfi MCP.",
+      "version": "1.5.0",
       "license": "MIT",
       "author": {
         "name": "holdequity",
