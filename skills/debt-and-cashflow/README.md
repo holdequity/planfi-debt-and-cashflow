@@ -5,7 +5,7 @@ Pay down debt and route surplus cash optimally: avalanche/snowball debt payoff o
 - **Debt consolidation** — `analyze_debt_consolidation`: weighs rolling high-APR revolving (credit-card) debt into a personal loan or a 0% balance transfer (new rate + fees + intro period) against the status quo, holding the monthly budget constant; returns months-to-debt-free, total interest + fees, and the recommended option.
 - **Student loans** — `analyze_student_loans`: compares standard, income-driven repayment (IDR), PSLF forgiveness, refinance, and aggressive payoff; returns total cost + payoff/forgiveness timeline per strategy and the recommended path.
 
-It's a **thin orchestration layer** over the public **planfi MCP** (`https://ai.planfi.app/mcp`,
+It's a **thin orchestration layer** over the public **planfi MCP** (`https://ai.planfi.app/mcp/free`,
 public, no auth) — all the math and financial logic live server-side. The skill itself bundles no
 engine; it just gathers inputs and calls the tools.
 
@@ -14,11 +14,13 @@ engine; it just gathers inputs and calls the tools.
 If the planfi tools aren't connected yet, run:
 
 ```
-claude mcp add --transport http planfi https://ai.planfi.app/mcp
+claude mcp add --transport http planfi https://ai.planfi.app/mcp/free
 ```
 
+> **Try free, then add your key.** The command above adds the **free** connector — `https://ai.planfi.app/mcp/free` (no key needed). Once you create an API key, add a **new** connector with the MCP url — `https://ai.planfi.app/mcp` — and authorize it with your key.
+
 On **claude.ai**: Settings → Connectors → add a custom connector pointing at
-`https://ai.planfi.app/mcp` (no auth). The skill also reminds you to do this if the tools are
+`https://ai.planfi.app/mcp/free` (no auth). The skill also reminds you to do this if the tools are
 missing when you invoke it.
 
 ## Install
