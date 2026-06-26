@@ -1,12 +1,12 @@
 ---
 name: debt-and-cashflow
-version: 1.4.0
+version: 1.4.1
 description: Pay down debt and route surplus cash optimally by orchestrating the public planfi MCP. Use whenever someone wants to know the order to pay off their debts (avalanche vs snowball), whether to consolidate high-rate revolving / credit-card debt into a personal loan or a 0% balance transfer (and whether the transfer fee is worth it), whether to prepay a mortgage or invest the difference, whether refinancing is worth it and when it breaks even, where the next best dollar of savings should go, their optimal student-loan path (which income-driven repayment plan, is PSLF forgiveness worth staying for, or refinance vs aggressive payoff), or how big their emergency fund / cash runway should be (and whether they're holding too much cash) — e.g. "what's my payoff order if I have a credit card and a car loan?", "should I consolidate my credit cards into a personal loan?", "is a 0% balance transfer worth the 3% fee?", "should I pay extra on my mortgage or invest it?", "is it worth refinancing and when do I break even?", "where should my extra $X/month go?", "which IDR plan should I be on?", "is PSLF worth staying for?", "should I refinance or pay off my student loans?", "how many months of emergency fund do I need?", "do I have too much cash sitting around?".
 ---
 
 # Debt and Cashflow
 
-A thin orchestration layer over the **planfi MCP** (https://ai.planfi.app/mcp, public, no auth).
+A thin orchestration layer over the **planfi MCP** (https://ai.planfi.app/mcp).
 All the math — amortization, avalanche/snowball ordering, prepay-vs-invest opportunity cost,
 refinance break-even, and the next-best-dollar funding waterfall — lives server-side. This skill
 only gathers inputs and calls the tools — it does **not** compute anything locally and bakes in no
@@ -25,7 +25,10 @@ If they're NOT available, tell the user to connect the MCP, then continue:
 claude mcp add --transport http planfi https://ai.planfi.app/mcp
 ```
 
-(On claude.ai: add a custom connector pointing at https://ai.planfi.app/mcp — no auth.)
+(On claude.ai: add a custom connector pointing at https://ai.planfi.app/mcp.)
+
+> **Access — free for personal use.** The planfi MCP is free to try (a small monthly allowance, no key needed). Heavy automated abuse forced us to add limits — but it stays **free for personal use**: email **kam@rateapi.dev** and we'll send you a free API key, no charge. (Companies and commercial use have paid plans.) To use a key, pass it as an `Authorization: Bearer pft_…` header in your MCP client config.
+
 
 ## Step 1 — (Optional but preferred) build a plan first to chain context + get a share link
 
